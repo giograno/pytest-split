@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "pytest-split"
+name = "pytest-split-ext"
 version = "0.8.1"
 description = "Pytest plugin which splits the test suite to equally sized sub suites based on test execution time."
 authors = [
@@ -35,6 +35,7 @@ include = ['LICENCE']
 [tool.poetry.dependencies]
 python = ">=3.7.1, <4.0"
 pytest = "^5 | ^6 | ^7"
+twine = "^4.0.2"
 
 
 [tool.poetry.dev-dependencies]

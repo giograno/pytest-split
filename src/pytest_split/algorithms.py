@@ -1,6 +1,7 @@
 import enum
 import functools
 import heapq
+from itertools import islice
 from operator import itemgetter
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -14,6 +15,54 @@ class TestGroup(NamedTuple):
     selected: "List[nodes.Item]"
     deselected: "List[nodes.Item]"
     duration: float
+
+
+def localstack_persistence(
+    splits: int, items: "List[nodes.Item]", durations: "Dict[str, float]"
+) -> "List[TestGroup]":
+    """Custom trivial implementation to split localstack persistence tests"""
+
+    def _split_dict_into_parts(d: dict, n: int) -> list[dict]:
+        part_length = len(d) // n
+        inc = iter(d.items())
+
+        parts = []
+        for _ in range(n):
+            part = dict(islice(inc, part_length))
+            parts.append(part)
+
+        for remaining in inc:
+            parts[-1][remaining[0]] = remaining[1]
+        return parts
+
+    setup_items: dict[str, nodes.Item] = {}
+    validation_items: dict[str, nodes.Item] = {}
+    restart_item: nodes.Item | None = None
+    for item in items:
+        if item.name == "restart_localstack":
+            restart_item = item
+        if "[persistence_validations]" in item.name:
+            validation_items[item.name] = item
+        if "[setup]" in item.name:
+            setup_items[item.name] = item
+    setup_groups: list[dict[str, nodes.Item]] = _split_dict_into_parts(setup_items, splits)
+
+    validation_groups: list[dict[str, nodes.Item]] = []
+    for i in range(splits):
+        _split = {}
+        for setup_test_name in setup_groups[i]:
+            validation_test_name = setup_test_name.replace("[setup]", "[persistence_validations]")
+            _split[validation_test_name] = validation_items[validation_test_name]
+        validation_groups.append(_split)
+
+    groups = []
+    for i in range(splits):
+        _selected: list[nodes.Item] = (list(setup_groups[i].values()) +
+                                       [restart_item] +
+                                       list(validation_groups[i].values()))
+        group = TestGroup(selected=_selected, deselected=[], duration=0)
+        groups.append(group)
+    return groups
 
 
 def least_duration(
@@ -156,6 +205,7 @@ class Algorithms(enum.Enum):
     # values have to wrapped inside functools to avoid them being considered method definitions
     duration_based_chunks = functools.partial(duration_based_chunks)
     least_duration = functools.partial(least_duration)
+    localstack_persistence = functools.partial(localstack_persistence)
 
     @staticmethod
     def names() -> "List[str]":
